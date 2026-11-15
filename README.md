@@ -43,7 +43,7 @@ mount = ["slices/act2.slice"]
 A slice mounts under the `alias` of its `slice.toml`, else under its directory name without
 `.slice`; either must be letters, digits, `_`, `.` or `-`, so a directory with another name (`世界.slice`)
 needs an `alias`. `flow.toml` is read again by every command, so later stages can be edited during a run.
-[`examples/manor`](examples/manor) is a complete three-act flow.
+[`examples/manor`](https://github.com/pancerZH/MindSlice-flow/tree/main/examples/manor) is a complete three-act flow.
 
 ## Commands
 
@@ -76,7 +76,7 @@ the flow finished; `next --to STAGE` plays a stage again. To undo a stage's bake
    you agree.
 5. Start a new session for the next stage (or let the agent call `manifest` again to continue).
 
-The stage cards are rendered from [`mindslice_flow/cards/`](mindslice_flow/cards) and carry the
+The stage cards are rendered from [`mindslice_flow/cards/`](https://github.com/pancerZH/MindSlice-flow/tree/main/mindslice_flow/cards) and carry the
 workspace's absolute path, so the agent never has to guess it.
 
 ## Not in this version

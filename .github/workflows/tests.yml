@@ -7,6 +7,7 @@ on:
   schedule:
     - cron: "17 6 * * 1"  # weekly, so a new mindslice release that breaks the flow shows up without a push
   workflow_dispatch:
+  workflow_call:  # publish.yml runs the full matrix before a release
 
 permissions:
   contents: read
