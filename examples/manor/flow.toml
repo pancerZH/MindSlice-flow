@@ -1,0 +1,18 @@
+name = "迷雾庄园"
+state = "story"                      # 每幕结算后 bake 进的累积状态 slice
+mount = ["slices/world.slice"]       # 每一幕都挂载
+
+[[stage]]
+id = "act1"
+title = "第一幕：抵达"
+mount = ["slices/act1.slice"]
+
+[[stage]]
+id = "act2"
+title = "第二幕：晚宴"
+mount = ["slices/act2.slice"]
+
+[[stage]]
+id = "act3"
+title = "第三幕：真相"
+mount = ["slices/act3.slice"]

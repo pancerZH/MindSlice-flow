@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mindslice-flow"
+version = "0.1.0"
+description = "Mount, settle and bake MindSlice memory stage by stage (Python stdlib only)."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "pancerZH" }]
+requires-python = ">=3.12"
+dependencies = []
+keywords = ["llm", "agents", "memory", "interactive-fiction", "mindslice"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+]
+
+[project.urls]
+Homepage = "https://github.com/pancerZH/MindSlice-flow"
+Issues = "https://github.com/pancerZH/MindSlice-flow/issues"
+MindSlice = "https://github.com/pancerZH/MindSlice"
+
+[project.scripts]
+mindslice-flow = "mindslice_flow.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mindslice_flow"]
+
+[tool.setuptools.package-data]
+mindslice_flow = ["cards/*.md"]
