@@ -47,6 +47,9 @@ def dispatch(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # stage titles are often CJK; the Windows locale cannot print them
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     args = parser().parse_args(argv)
     try:
         dispatch(args)

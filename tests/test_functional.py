@@ -6,6 +6,7 @@ The test plays the agent: it writes overlay cards with ``mindslice write`` and r
 import contextlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -47,7 +48,8 @@ class FunctionalTest(unittest.TestCase):
         return self.ok("-w", self.ws, "next", *args)
 
     def engine(self, *args):
-        done = subprocess.run(["mindslice", "-w", str(self.ws), *args], capture_output=True, text=True)
+        done = subprocess.run(["mindslice", "-w", str(self.ws), *args], capture_output=True, text=True,
+                              encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
         self.assertEqual(done.returncode, 0, done.stderr)
         return done.stdout
 

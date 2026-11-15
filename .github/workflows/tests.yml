@@ -1,0 +1,47 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"  # weekly, so a new mindslice release that breaks the flow shows up without a push
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    strategy:
+      fail-fast: false  # a failure on one platform or engine should not hide the others
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+        engine: [latest, minimum]  # newest mindslice on PyPI, and engine.MINIMUM
+        python: ["3.12"]
+        include:
+          - os: ubuntu-24.04
+            engine: latest
+            python: "3.x"  # the newest Python
+    name: ${{ matrix.os }} / py${{ matrix.python }} / mindslice ${{ matrix.engine }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install the MindSlice engine
+        shell: bash
+        run: |
+          if [ "${{ matrix.engine }}" = minimum ]; then
+            spec="mindslice==$(python -c 'from mindslice_flow.engine import MINIMUM; print(".".join(map(str, MINIMUM)))')"
+          else
+            spec=mindslice
+          fi
+          python -m pip install --upgrade "$spec"
+      # The functional tests are skipped without the engine; fail here instead of passing without them.
+      - name: Engine version
+        run: mindslice --version
+      - name: Tests
+        run: python -m unittest discover -s tests -t . -v

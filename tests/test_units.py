@@ -1,6 +1,7 @@
 """Definition parsing and checks, mount planning and card rendering; no engine needed."""
 
 import dataclasses
+import shlex
 import shutil
 import tempfile
 import tomllib
@@ -104,7 +105,7 @@ class CardsTest(unittest.TestCase):
         self.assertIn("第 2 幕（共 3 幕）", files["stage.md"])
         self.assertIn("@story/summaries/ 下（act1）", files["stage.md"])
         self.assertNotIn('load = "always"', files["settlement.md"])
-        self.assertIn("mindslice-flow -w '/tmp/my run' next", files["settlement.md"])
+        self.assertIn(f"mindslice-flow -w {shlex.quote(str(self.ws))} next", files["settlement.md"])
         self.assertIn("summaries/act2", files["settlement.md"])
         self.assertIn('alias = "@flow"', files["slice.toml"])
 

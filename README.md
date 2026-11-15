@@ -91,7 +91,9 @@ workspace's absolute path, so the agent never has to guess it.
 python -m unittest discover -s tests -t . -v
 ```
 
-The functional tests run the example flow with the real `mindslice` command and no model.
+The functional tests run the example flow with the real `mindslice` command and no model. CI runs
+them on Linux, Windows and macOS against both the newest `mindslice` on PyPI and the oldest supported
+one (`MINIMUM` in `mindslice_flow/engine.py`), on every push and weekly.
 
 ## License
 
