@@ -41,7 +41,8 @@ mount = ["slices/act2.slice"]
 ```
 
 A slice mounts under the `alias` of its `slice.toml`, else under its directory name without
-`.slice`. `flow.toml` is read again by every command, so later stages can be edited during a run.
+`.slice`; either must be letters, digits, `_`, `.` or `-`, so a directory with another name (`世界.slice`)
+needs an `alias`. `flow.toml` is read again by every command, so later stages can be edited during a run.
 [`examples/manor`](examples/manor) is a complete three-act flow.
 
 ## Commands
@@ -61,7 +62,7 @@ directory with `mounts.toml`. Each run gets its own workspace; the flow owns its
 plus `@overlay`, the state slice and `@flow`, and rewrites the `@flow` cards. It writes its state last,
 so running it again after an interruption finishes the same switch. After the last stage it marks
 the flow finished; `next --to STAGE` plays a stage again. To undo a stage's bake, use
-`mindslice rollback @story` and then `next --to`.
+`mindslice rollback @story --yes` and then `next --to`.
 
 ## Playing
 

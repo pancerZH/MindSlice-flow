@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
+import shutil
 import tomllib
 from importlib import resources
 from pathlib import Path
@@ -16,6 +18,7 @@ STATE = Path(".flow/state.json")
 FLOW_SLICE = Path(".flow/stage.slice")
 SCRIPT_PRECEDENCE = 40  # below the state slice (mounted at 50 by bake), so baked cards win on shared paths
 FLOW_PRECEDENCE = 60
+PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
 
 # -- workspace and state ----------------------------------------------------
@@ -34,8 +37,18 @@ def locate(arg: Path | None) -> Path:
     return ws
 
 
-def load_state(ws: Path) -> dict:
-    return json.loads((ws / STATE).read_text(encoding="utf-8"))
+def load(ws: Path) -> tuple[dict, Flow]:
+    """The state of the run and its flow definition, which is read again by every command."""
+    state = json.loads((ws / STATE).read_text(encoding="utf-8"))
+    root = Path(state["flow"])
+    if not (root / definition.FILE).is_file():
+        raise FlowError(f"the flow definition {root} is gone; if it moved, set `flow` in {ws / STATE} to its new path")
+    flow = definition.load(root)
+    if state.get("state", flow.state) != flow.state:
+        raise FlowError(f"{root / definition.FILE} now has state = \"{flow.state}\", but this run bakes into "
+                        f"@{state['state']}; a run keeps one state slice, so change it back")
+    engine.version()
+    return state, flow
 
 
 def save_state(ws: Path, state: dict) -> None:
@@ -61,9 +74,10 @@ def _template(name: str) -> str:
 
 
 def fill(text: str, values: dict[str, str]) -> str:
-    for key, value in values.items():
-        text = text.replace("{{" + key + "}}", value)
-    return text
+    """Fill the ``{{key}}`` placeholders of a card; in its TOML frontmatter the values are escaped."""
+    _, head, body = text.split("+++\n", 2)
+    head = PLACEHOLDER.sub(lambda m: json.dumps(values[m[1]], ensure_ascii=False)[1:-1], head)
+    return f"+++\n{head}+++\n{PLACEHOLDER.sub(lambda m: values[m[1]], body)}"
 
 
 def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> dict[str, str]:
@@ -111,7 +125,8 @@ def render(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> None:
 def sync(ws: Path, flow: Flow, stage: Stage | None) -> tuple[list[str], list[str]]:
     """Mount exactly the slices of ``stage``, plus @overlay, the state slice and @flow.
 
-    Mounts are compared by directory, so an alias never has to be guessed. Returns (mounted, unmounted).
+    Mounts are compared by directory, and mounted under the alias the definition was checked with.
+    Returns (mounted, unmounted).
     """
     want = flow.mounts(stage)
     keep = {"@overlay", f"@{flow.state}", f"@{FLOW_ALIAS}"}
@@ -126,7 +141,8 @@ def sync(ws: Path, flow: Flow, stage: Stage | None) -> tuple[list[str], list[str
         else:
             engine.unmount(ws, m["alias"])
             removed.append(m["alias"])
-    added = [engine.mount(ws, path, SCRIPT_PRECEDENCE) for path in want if path not in have]
+    added = [engine.mount(ws, path, SCRIPT_PRECEDENCE, alias=definition.alias(path))
+             for path in want if path not in have]
     if not any(m["alias"] == f"@{FLOW_ALIAS}" for m in mounts):
         added.append(engine.mount(ws, ws / FLOW_SLICE, FLOW_PRECEDENCE, alias=FLOW_ALIAS))
     return added, removed
@@ -147,10 +163,14 @@ def init(flow_dir: Path, ws: Path) -> None:
         raise FlowError(f"{ws} already exists and is not empty; every run needs its own workspace")
     for warning in definition.warnings(flow):
         print(f"warning: {warning}")
-    engine.init(ws)
     first = flow.stages[0]
-    added, _ = enter(ws, flow, first, [])
-    save_state(ws, {"flow": str(flow.root), "stage": first.id, "done": []})
+    try:
+        engine.init(ws)
+        added, _ = enter(ws, flow, first, [])
+        save_state(ws, {"flow": str(flow.root), "state": flow.state, "stage": first.id, "done": []})
+    except BaseException:
+        shutil.rmtree(ws, ignore_errors=True)  # it was empty before, and a half-made workspace cannot be resumed
+        raise
     print(f"created {ws} for 「{flow.name}」 ({len(flow.stages)} stages)")
     print(f"stage 1: {first.title} ({first.id}); mounted {' '.join(added)}")
     print("\nPoint your harness's MindSlice at this workspace, for example:")
@@ -160,15 +180,15 @@ def init(flow_dir: Path, ws: Path) -> None:
 
 
 def status(ws: Path) -> None:
-    state = load_state(ws)
-    flow = definition.load(Path(state["flow"]))
+    state, flow = load(ws)
     st = engine.status(ws)
     versions = {d["stage"]: d["version"] for d in state["done"]}
     print(f"「{flow.name}」  {flow.root}")
     print(f"workspace: {ws}")
     for stage in flow.stages:
-        mark = "▶" if stage.id == state["stage"] else ("✓" if stage.id in versions else " ")
-        baked = f"  → @{flow.state} {versions[stage.id]}" if versions.get(stage.id) else ""
+        current = stage.id == state["stage"]
+        mark = "▶" if current else ("✓" if stage.id in versions else " ")
+        baked = f"  → @{flow.state} {versions[stage.id]}" if versions.get(stage.id) and not current else ""
         print(f"  {mark} {stage.id}  {stage.title}{baked}")
     if state["stage"] is None:
         print("the flow is finished")
@@ -185,8 +205,7 @@ def status(ws: Path) -> None:
 def advance(ws: Path, to: str | None = None) -> None:
     """Settle the current stage and enter the next one (or ``to``). Safe to run again after an interruption:
     the bake is skipped once the overlay is empty, and the state is written last."""
-    state = load_state(ws)
-    flow = definition.load(Path(state["flow"]))
+    state, flow = load(ws)
     current = state["stage"]
     if to is not None:
         target = flow.stages[flow.index(to)]

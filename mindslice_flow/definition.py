@@ -13,6 +13,7 @@ FILE = "flow.toml"
 FLOW_ALIAS = "flow"  # the slice the flow renders its own cards into
 RESERVED = {"overlay", FLOW_ALIAS}
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+ALIAS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")  # what the engine accepts as a mount alias
 
 
 @dataclass(frozen=True)
@@ -40,19 +41,20 @@ class Flow:
         return [stage.id for stage in self.stages]
 
     def mounts(self, stage: Stage | None) -> list[Path]:
-        """Every slice directory to mount in ``stage`` (only the common ones once the flow is finished)."""
-        return [*self.mount, *(stage.mount if stage else ())]
+        """Every slice directory to mount in ``stage``, each once (only the common ones once the flow is
+        finished)."""
+        return list(dict.fromkeys([*self.mount, *(stage.mount if stage else ())]))
 
 
 def alias(slice_dir: Path) -> str:
-    """The alias the engine mounts a directory under: ``alias`` in its slice.toml, else the directory name."""
+    """The alias a directory mounts under: ``alias`` in its slice.toml, else the directory name."""
     meta = slice_dir / "slice.toml"
     if meta.is_file():
         try:
             value = tomllib.loads(meta.read_text(encoding="utf-8")).get("alias")
         except tomllib.TOMLDecodeError as error:
             raise FlowError(f"{meta}: {error}") from None
-        if isinstance(value, str) and value.strip("@"):
+        if isinstance(value, str) and value.strip().lstrip("@"):
             return value.strip().lstrip("@")
     return slice_dir.name.removesuffix(".slice")
 
@@ -110,6 +112,9 @@ def load(flow_dir: Path) -> Flow:
         taken: dict[str, Path] = {}
         for path in flow.mounts(stage):
             a = alias(path)
+            if not ALIAS.match(a):
+                raise FlowError(f"stage {stage.id}: {path} cannot mount as @{a}; set an `alias` of letters, digits, "
+                                f"'_', '.' or '-' in its slice.toml")
             if a in RESERVED or a == state:
                 raise FlowError(f"stage {stage.id}: {path} would mount as @{a}, which the flow reserves; "
                                 f"set another `alias` in its slice.toml")

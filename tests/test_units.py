@@ -1,7 +1,9 @@
 """Definition parsing and checks, mount planning and card rendering; no engine needed."""
 
+import dataclasses
 import shutil
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -48,8 +50,9 @@ class DefinitionTest(unittest.TestCase):
         for text, message in cases.items():
             with self.subTest(text=text):
                 self.write(text)
-                if message is None:
-                    definition.load(self.root)  # the same directory twice is not a collision
+                if message is None:  # the same directory twice is not a collision, and mounts once
+                    flow = definition.load(self.root)
+                    self.assertEqual([p.name for p in flow.mounts(flow.stages[0])], ["common.slice", "a.slice"])
                     continue
                 with self.assertRaises(FlowError) as caught:
                     definition.load(self.root)
@@ -64,6 +67,14 @@ class DefinitionTest(unittest.TestCase):
         with self.assertRaisesRegex(FlowError, "reserves"):
             definition.load(self.root)
         self.assertEqual(definition.alias(self.root / "a.slice"), "a")
+
+    def test_alias_the_engine_rejects(self):
+        (self.root / "世界.slice").mkdir()
+        self.write('mount = ["世界.slice"]\n[[stage]]\nid = "x"\n')
+        with self.assertRaisesRegex(FlowError, "cannot mount as @世界"):
+            definition.load(self.root)
+        (self.root / "世界.slice" / "slice.toml").write_text('alias = "@world"\n', encoding="utf-8")
+        self.assertEqual(definition.alias(definition.load(self.root).mount[0]), "world")
 
     def test_always_loaded_warning(self):
         (self.root / "a.slice" / "director.md").write_text('+++\ntitle = "d"\nload = "always"\n+++\nx\n',
@@ -105,6 +116,16 @@ class CardsTest(unittest.TestCase):
         self.assertIn("（act1, act2）", last["stage.md"])
         self.assertIn("最后一幕", last["settlement.md"])
 
+    def test_quotes_in_names(self):
+        title = '第一幕："抵达" \\ {{state}}'
+        stage = dataclasses.replace(self.flow.stages[0], title=title)
+        flow = dataclasses.replace(self.flow, name='迷雾"庄园"', stages=(stage, *self.flow.stages[1:]))
+        text = run.cards(self.ws, flow, stage, [])["stage.md"]
+        meta = tomllib.loads(text.split("+++\n")[1])
+        self.assertEqual(meta["title"], f"当前阶段：{title}")
+        self.assertIn('「迷雾"庄园"」', meta["summary"])
+        self.assertIn(f"「{title}」", text.split("+++\n")[2])  # the body is filled as is, in one pass
+
     def test_finished(self):
         files = run.cards(self.ws, self.flow, None, ["act1", "act2", "act3"])
         self.assertEqual(set(files), {"slice.toml", "stage.md"})
@@ -131,11 +152,11 @@ class SyncTest(unittest.TestCase):
         with mock.patch.object(run.engine, "status", return_value={"mounts": table}), \
                 mock.patch.object(run.engine, "unmount", side_effect=lambda w, a: calls.append(("unmount", a))), \
                 mock.patch.object(run.engine, "mount", side_effect=lambda w, p, prec, alias=None:
-                                  calls.append(("mount", p.name, prec)) or f"@{p.name.removesuffix('.slice')}"):
+                                  calls.append(("mount", p.name, prec, alias)) or f"@{alias}"):
             added, removed = run.sync(ws, flow, flow.stages[1])
         self.assertEqual(removed, ["@act1", "@extra"])
         self.assertEqual(added, ["@act2"])
-        self.assertIn(("mount", "act2.slice", run.SCRIPT_PRECEDENCE), calls)
+        self.assertIn(("mount", "act2.slice", run.SCRIPT_PRECEDENCE, "act2"), calls)
 
 
 if __name__ == "__main__":

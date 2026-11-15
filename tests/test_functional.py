@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from mindslice_flow import cli, run
+from mindslice_flow import FlowError, cli, run
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "manor"
 
@@ -86,7 +86,7 @@ class FunctionalTest(unittest.TestCase):
         boot = self.boot()
         self.assertIn("第一幕导演卡", boot)
         self.assertIn("当前阶段：第一幕：抵达", boot)
-        self.assertEqual(self.state(), {"flow": str(EXAMPLE), "stage": "act1", "done": []})
+        self.assertEqual(self.state(), {"flow": str(EXAMPLE), "state": "story", "stage": "act1", "done": []})
 
         self.play_act1()
         self.assertIn("overlay cards to settle (3)", self.ok("-w", self.ws, "status"))
@@ -172,10 +172,46 @@ class FunctionalTest(unittest.TestCase):
 
         out = self.next()
         self.assertIn("nothing in @overlay to bake", out)
-        self.assertEqual(self.state(), {"flow": str(EXAMPLE), "stage": "act2",
+        self.assertEqual(self.state(), {"flow": str(EXAMPLE), "state": "story", "stage": "act2",
                                         "done": [{"stage": "act1", "version": "0.1.0"}]})
         self.assertEqual(self.aliases(), {"@overlay", "@world", "@act2", "@flow", "@story"})
         self.assertIn("第二幕导演卡", self.boot())
+
+    def test_failed_init_leaves_no_workspace(self):
+        with mock.patch.object(run, "sync", side_effect=FlowError("mount failed")):
+            code, _, err = self.flow("init", EXAMPLE, "-o", self.ws)
+        self.assertEqual(code, 1)
+        self.assertIn("mount failed", err)
+        self.assertFalse(self.ws.exists())
+        self.init()  # so the same command works once the cause is fixed
+
+    def test_definition_changes(self):
+        """A slice whose directory name is no alias, a title with quotes, and edits the run cannot follow."""
+        flow_dir = self.tmp / "def"
+        shutil.copytree(EXAMPLE, flow_dir)
+        world = flow_dir / "slices" / "世界.slice"
+        (flow_dir / "slices" / "world.slice").rename(world)
+        with (world / "slice.toml").open("a", encoding="utf-8") as meta:
+            meta.write('alias = "lore"\n')
+        toml = flow_dir / "flow.toml"
+        text = toml.read_text(encoding="utf-8").replace("slices/world.slice", "slices/世界.slice")
+        toml.write_text(text.replace('"第一幕：抵达"', "'第一幕：\"抵达\"'"), encoding="utf-8")
+
+        self.ok("init", flow_dir, "-o", self.ws)
+        self.assertEqual(self.aliases(), {"@overlay", "@lore", "@act1", "@flow"})
+        self.assertIn('当前阶段：第一幕："抵达"', self.boot())
+        self.assertEqual(json.loads(self.engine("validate", "--json"))["errors"], [])
+
+        toml.write_text(text.replace('state = "story"', 'state = "saga"'), encoding="utf-8")
+        code, _, err = self.flow("-w", self.ws, "next")
+        self.assertEqual(code, 1)
+        self.assertIn("a run keeps one state slice", err)
+        self.assertEqual(self.state()["stage"], "act1")
+
+        flow_dir.rename(self.tmp / "moved")
+        code, _, err = self.flow("-w", self.ws, "status")
+        self.assertEqual(code, 1)
+        self.assertIn("set `flow` in", err)
 
     def test_workspace_errors(self):
         self.init()
