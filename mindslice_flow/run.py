@@ -174,7 +174,11 @@ def init(flow_dir: Path, ws: Path) -> None:
     print(f"created {ws} for 「{flow.name}」 ({len(flow.stages)} stages)")
     print(f"stage 1: {first.title} ({first.id}); mounted {' '.join(added)}")
     print("\nPoint your harness's MindSlice at this workspace, for example:")
-    print(f"  export MINDSLICE_WORKSPACE={shlex.quote(str(ws))}")
+    if os.name == "nt":  # `export` is POSIX shell only; PowerShell is the default shell on Windows
+        quoted = "'" + str(ws).replace("'", "''") + "'"
+        print(f"  $env:MINDSLICE_WORKSPACE = {quoted}   (PowerShell)")
+        print(f"  set \"MINDSLICE_WORKSPACE={ws}\"   (cmd)")
+    print(f"  export MINDSLICE_WORKSPACE={shlex.quote(str(ws))}" + ("   (Git Bash)" if os.name == "nt" else ""))
     print(f"  (MCP server command: mindslice -w {shlex.quote(str(ws))} mcp)")
     print("then start a new session and play.")
 

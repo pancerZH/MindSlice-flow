@@ -160,5 +160,22 @@ class SyncTest(unittest.TestCase):
         self.assertIn(("mount", "act2.slice", run.SCRIPT_PRECEDENCE, "act2"), calls)
 
 
+class EngineCommandTest(unittest.TestCase):
+    """The engine is called by the full path ``shutil.which`` finds, so a Windows ``.cmd`` shim works."""
+
+    def test_full_path(self):
+        shim = r"C:\tools\bin\mindslice.CMD"
+        done = mock.Mock(returncode=0, stdout="mindslice 9.9.9\n", stderr="")
+        with mock.patch.object(run.engine.shutil, "which", return_value=shim), \
+                mock.patch.object(run.engine.subprocess, "run", return_value=done) as called:
+            run.engine.version()
+        self.assertEqual(called.call_args.args[0], [shim, "--version"])
+
+    def test_missing(self):
+        with mock.patch.object(run.engine.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(FlowError, "not on PATH"):
+                run.engine.version()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -48,7 +48,7 @@ class FunctionalTest(unittest.TestCase):
         return self.ok("-w", self.ws, "next", *args)
 
     def engine(self, *args):
-        done = subprocess.run(["mindslice", "-w", str(self.ws), *args], capture_output=True, text=True,
+        done = subprocess.run([shutil.which("mindslice"), "-w", str(self.ws), *args], capture_output=True, text=True,
                               encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
         self.assertEqual(done.returncode, 0, done.stderr)
         return done.stdout

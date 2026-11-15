@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,10 +14,19 @@ from . import FlowError
 MINIMUM = (0, 1, 6)  # the oldest engine whose bake, mount and status behaviour this flow was checked against
 
 
+def command() -> str:
+    """The full path of ``mindslice``. On Windows it may be a ``.cmd``/``.bat`` shim, which ``subprocess``
+    finds only by full path (CreateProcess appends just ``.exe``); ``shutil.which`` honours PATHEXT."""
+    found = shutil.which("mindslice")
+    if found is None:
+        raise FlowError("the `mindslice` command is not on PATH; install the MindSlice engine first")
+    return found
+
+
 def _engine(*args: str) -> subprocess.CompletedProcess:
     try:
         # The engine writes CJK text; without this its piped output uses the locale encoding on Windows.
-        return subprocess.run(["mindslice", *args], capture_output=True, text=True, encoding="utf-8",
+        return subprocess.run([command(), *args], capture_output=True, text=True, encoding="utf-8",
                               env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     except FileNotFoundError:
         raise FlowError("the `mindslice` command is not on PATH; install the MindSlice engine first") from None
