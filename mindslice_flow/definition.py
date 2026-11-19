@@ -21,6 +21,9 @@ class Stage:
     id: str
     title: str
     mount: tuple[Path, ...]
+    premise: str = ""  # what the story should hold when this stage starts; the agent judges it
+    side: bool = False  # off the main line: `next` never walks into it, `next --to` does
+    generated: bool = False  # written by the agent during this run; its slice is in the workspace
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,13 @@ class Flow:
 
     def ids(self) -> list[str]:
         return [stage.id for stage in self.stages]
+
+    def main(self) -> list[Stage]:
+        """The main line: the stages without ``side = true``, in their order."""
+        return [stage for stage in self.stages if not stage.side]
+
+    def main_index(self, stage_id: str) -> int | None:
+        return next((i for i, s in enumerate(self.main()) if s.id == stage_id), None)
 
     def mounts(self, stage: Stage | None) -> list[Path]:
         """Every slice directory to mount in ``stage``, each once (only the common ones once the flow is
@@ -105,7 +115,15 @@ def load(flow_dir: Path) -> Flow:
         title = item.get("title", sid)
         if not isinstance(title, str):
             raise FlowError(f"{where}: `title` must be a string")
-        stages.append(Stage(sid, title, _paths(root, item.get("mount", []), where)))
+        premise = item.get("premise", "")
+        if not isinstance(premise, str):
+            raise FlowError(f"{where}: `premise` must be a string")
+        side = item.get("side", False)
+        if not isinstance(side, bool):
+            raise FlowError(f"{where}: `side` must be true or false")
+        stages.append(Stage(sid, title, _paths(root, item.get("mount", []), where), premise.strip(), side))
+    if all(stage.side for stage in stages):
+        raise FlowError(f"{file}: every stage has side = true; the main line needs at least one stage")
 
     flow = Flow(root, name.strip(), state, common, tuple(stages))
     for stage in flow.stages:

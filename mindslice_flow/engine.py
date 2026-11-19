@@ -111,6 +111,7 @@ def read(ws: Path, address: str) -> dict | None:
     raise _error(args, done)
 
 
-def bake(ws: Path, alias: str) -> dict:
-    """Move every @overlay card into the slice ``alias``: a new slice the first time, a new version after."""
-    return _call("-w", str(ws), "bake", f"@{alias}", "--prefix", "")
+def bake(ws: Path, alias: str, prefix: str = "") -> dict:
+    """Move the @overlay cards under ``prefix`` (all of them by default) into the slice ``alias``: a new
+    slice, mounted at once, the first time, and a new version after."""
+    return _call("-w", str(ws), "bake", f"@{alias}", "--prefix", prefix)

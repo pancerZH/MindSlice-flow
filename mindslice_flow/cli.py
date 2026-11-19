@@ -30,7 +30,18 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="show the stages, the mounts and what the current stage leaves to settle")
 
     n = sub.add_parser("next", help="bake the current stage into the state slice and enter the next stage")
-    n.add_argument("--to", metavar="STAGE", help="enter this stage instead of the next one")
+    way = n.add_mutually_exclusive_group()
+    way.add_argument("--to", metavar="STAGE", help="enter this stage instead of the default next one")
+    way.add_argument("--new", metavar="ID",
+                     help="enter a side stage the agent wrote under stages/ID/ (plan card required); it is baked "
+                          "into a slice @ID of its own")
+    n.add_argument("--title", help="the new stage's title (with --new)")
+    n.add_argument("--rejoin", metavar="STAGE",
+                   help="the main-line stage a plain `next` enters after the new one (with --new; default: the "
+                        "next main-line stage)")
+    n.add_argument("--reuse", metavar="STAGE", action="append", default=[],
+                   help="also mount this stage's slices as material (repeatable): a stage already played, or a "
+                        "main-line stage no later than the one the story heads for")
     return p
 
 
@@ -43,7 +54,7 @@ def dispatch(args: argparse.Namespace) -> None:
     elif args.command == "status":
         run.status(run.locate(args.workspace))
     else:
-        run.advance(run.locate(args.workspace), args.to)
+        run.advance(run.locate(args.workspace), args.to, args.new, args.title, args.rejoin, args.reuse)
 
 
 def main(argv: list[str] | None = None) -> int:

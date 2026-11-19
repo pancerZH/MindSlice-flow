@@ -10,9 +10,18 @@ mount = ["slices/act1.slice"]
 [[stage]]
 id = "act2"
 title = "第二幕：晚宴"
+premise = "玩家留在庄园过夜，打算查一查封闭的东翼"   # 入口条件：GM 结算时据此判断走向
 mount = ["slices/act2.slice"]
 
 [[stage]]
 id = "act3"
 title = "第三幕：真相"
+premise = "玩家拿到了东翼的钥匙"
 mount = ["slices/act3.slice"]
+
+[[stage]]
+id = "cellar"
+title = "酒窖"
+premise = "玩家发现了通往酒窖的暗门"
+side = true                          # 预设支线：顺序推进不会进入，用 next --to cellar
+mount = ["slices/cellar.slice"]
