@@ -5,7 +5,7 @@ workspace and drives the ``mindslice`` command; the agent in the user's own harn
 and tidies its memory, following the cards the flow renders into the ``@flow`` slice.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 class FlowError(Exception):
