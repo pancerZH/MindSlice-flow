@@ -136,7 +136,7 @@ class RouteTest(unittest.TestCase):
     def test_generated_stage(self):
         stage = run.stage_of(self.ws, self.flow, state("side1", generated=SIDE), "side1")
         self.assertEqual((stage.title, stage.side, stage.generated), ("海边小屋", True, True))
-        self.assertEqual(stage.mount, (Path("/ws/slices/side1.slice"),))
+        self.assertEqual(stage.mount, ((self.ws / "slices" / "side1.slice").resolve(),))  # resolve() adds the drive on Windows
         with self.assertRaisesRegex(FlowError, "stages: act1, act2, act3, cellar, side1"):
             run.stage_of(self.ws, self.flow, state("side1", generated=SIDE), "nope")
 
