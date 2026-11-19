@@ -11,7 +11,7 @@ per stage) and mounts the next stage. The first use is a multi-act tabletop / in
 The flow is a small state machine on top of the `mindslice` command. It starts no agent and calls no
 model: the player plays in their own harness, and the agent runs `next` for them when they ask.
 
-Python 3.12+, standard library only. Needs `mindslice` 0.1.6 or newer on `PATH`.
+Python 3.12+, standard library only. Needs `mindslice` 0.2.5 or newer on `PATH`.
 
 ## A flow definition
 
@@ -95,8 +95,7 @@ python -m unittest discover -s tests -t . -v
 ```
 
 The functional tests run the example flow with the real `mindslice` command and no model. CI runs
-them on Linux, Windows and macOS against both the newest `mindslice` on PyPI and the oldest supported
-one (`MINIMUM` in `mindslice_flow/engine.py`), on every push and weekly.
+them on Linux, Windows and macOS against the newest `mindslice` on PyPI, on every push and weekly.
 
 ## License
 

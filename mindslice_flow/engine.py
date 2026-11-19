@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import FlowError
 
-MINIMUM = (0, 1, 6)  # the oldest engine whose bake, mount and status behaviour this flow was checked against
+MINIMUM = (0, 2, 5)  # older engines are not supported (single user, no compatibility kept)
 
 
 def command() -> str:
