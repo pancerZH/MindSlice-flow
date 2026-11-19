@@ -19,6 +19,7 @@ FLOW_SLICE = Path(".flow/stage.slice")
 SCRIPT_PRECEDENCE = 40  # below the state slice (mounted at 50 by bake), so baked cards win on shared paths
 FLOW_PRECEDENCE = 60
 PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
+WIKILINK = re.compile(r"\[\[([^\[\]|\n]+?)(\|[^\[\]\n]*)?\]\]")  # the engine's own link syntax
 
 
 # -- workspace and state ----------------------------------------------------
@@ -80,6 +81,18 @@ def fill(text: str, values: dict[str, str]) -> str:
     return f"+++\n{head}+++\n{PLACEHOLDER.sub(lambda m: values[m[1]], body)}"
 
 
+def qualify_links(body: str, alias: str) -> str:
+    """Prefix the unqualified links of a card from ``@alias`` with it, so they still resolve elsewhere.
+
+    The engine resolves ``[[x]]`` in the card's own mount and ``[[@alias/x]]`` in ``@alias``, by path and
+    then by card alias in both cases, so the rewrite keeps every link's target.
+    """
+    def one(m: re.Match) -> str:
+        ref = m[1].strip()
+        return m[0] if ref.startswith("@") else f"[[@{alias}/{ref}{m[2] or ''}]]"
+    return WIKILINK.sub(one, body)
+
+
 def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str],
           recap: tuple[str, str] | None = None) -> dict[str, str]:
     """The files of the @flow slice for ``stage`` (``None``: the flow is finished).
@@ -109,7 +122,8 @@ def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str],
         previous = "这是本次运行的第一幕，还没有前情。"
     values |= {
         "stage_id": stage.id, "stage_title": stage.title, "number": str(number), "previous": previous,
-        "recap": f"\n## 上一幕摘要（@{flow.state}/summaries/{recap[0]}）\n\n{recap[1].strip()}\n" if recap else "",
+        "recap": (f"\n## 上一幕摘要（@{flow.state}/summaries/{recap[0]}）\n\n"
+                  f"{qualify_links(recap[1].strip(), flow.state)}\n" if recap else ""),
         "after": ("这是最后一幕，next 会把流程标记为结束。" if last else
                   "建议用户开一个新会话进入下一幕；若在当前会话继续，先调用 manifest 重新加载常驻卡，"
                   "此前的导演卡和本卡随之作废。"),

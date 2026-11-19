@@ -75,7 +75,7 @@ class FunctionalTest(unittest.TestCase):
         return sorted(p.name for p in (self.ws / "overlay").rglob("*.md"))
 
     def play_act1(self):
-        self.write("summaries/act1", "玩家抵达庄园，决定晚宴后调查东翼。")
+        self.write("summaries/act1", "玩家抵达庄园，立下[[player/vow|誓言]]，决定晚宴后调查东翼。")
         self.write("people/butler-secret", "格雷在玩家面前摸了摸腰间的钥匙。", "--supersedes", "@world/people/butler")
         self.write("player/vow", "玩家发誓查清老爵士的死因。", "--load", "always", "--no-stage")
 
@@ -104,12 +104,14 @@ class FunctionalTest(unittest.TestCase):
         self.assertIn("玩家发誓查清老爵士的死因", boot)  # the baked always-loaded card stays standing
         # the stage card carries the baked summary of act1 itself
         self.assertIn("上一幕（act1）的摘要附在本卡末尾", boot)
-        self.assertIn("## 上一幕摘要（@story/summaries/act1）\n\n玩家抵达庄园，决定晚宴后调查东翼。", boot)
+        # its links now point into @story, where they resolve
+        self.assertIn("## 上一幕摘要（@story/summaries/act1）\n\n玩家抵达庄园，立下[[@story/player/vow|誓言]]", boot)
         # the baked fork still reads, and still hides the world card it supersedes
         read = json.loads(self.engine("read", "people/butler-secret", "--json"))
         self.assertEqual(read["address"], "@story/people/butler-secret")
         validate = json.loads(self.engine("validate", "--json"))
         self.assertEqual(validate["errors"], [])
+        self.assertEqual([w for w in validate["warnings"] if w.get("address", "").startswith("@flow/")], [])
 
         self.write("summaries/act2", "玩家说服格雷交出了钥匙。")
         self.write("player/vow", "- 玩家答应替格雷保密。", "--op", "append", "--no-stage")

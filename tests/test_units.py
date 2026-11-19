@@ -128,6 +128,13 @@ class CardsTest(unittest.TestCase):
         plain = run.cards(self.ws, self.flow, self.flow.stages[1], ["act1"])["stage.md"]
         self.assertTrue(plain.endswith("并照做。\n"))
 
+    def test_qualify_links(self):
+        body = "[[player/status|叶凡]]、[[ 庞博 ]]、[[@world/npcs/x|甲]]与[[summaries/act1]]"
+        self.assertEqual(run.qualify_links(body, "story"),
+                         "[[@story/player/status|叶凡]]、[[@story/庞博]]、[[@world/npcs/x|甲]]与[[@story/summaries/act1]]")
+        text = run.cards(self.ws, self.flow, self.flow.stages[1], ["act1"], ("act1", "见[[player/vow]]"))["stage.md"]
+        self.assertIn("见[[@story/player/vow]]", text)
+
     def test_quotes_in_names(self):
         title = '第一幕："抵达" \\ {{state}}'
         stage = dataclasses.replace(self.flow.stages[0], title=title)
