@@ -102,7 +102,9 @@ class FunctionalTest(unittest.TestCase):
         self.assertIn("第二幕导演卡", boot)
         self.assertNotIn("第一幕导演卡", boot)
         self.assertIn("玩家发誓查清老爵士的死因", boot)  # the baked always-loaded card stays standing
-        self.assertIn("@story/summaries/ 下（act1）", boot)
+        # the stage card carries the baked summary of act1 itself
+        self.assertIn("上一幕（act1）的摘要附在本卡末尾", boot)
+        self.assertIn("## 上一幕摘要（@story/summaries/act1）\n\n玩家抵达庄园，决定晚宴后调查东翼。", boot)
         # the baked fork still reads, and still hides the world card it supersedes
         read = json.loads(self.engine("read", "people/butler-secret", "--json"))
         self.assertEqual(read["address"], "@story/people/butler-secret")
@@ -113,7 +115,11 @@ class FunctionalTest(unittest.TestCase):
         self.write("player/vow", "- 玩家答应替格雷保密。", "--op", "append", "--no-stage")
         self.assertIn("@story 0.1.1", self.next())
         self.assertEqual(self.story_version(), "0.1.1")
-        self.assertIn("第三幕导演卡", self.boot())
+        boot = self.boot()
+        self.assertIn("第三幕导演卡", boot)
+        self.assertIn("上一幕摘要（@story/summaries/act2）\n\n玩家说服格雷交出了钥匙。", boot)
+        self.assertNotIn("玩家抵达庄园", boot)  # an older summary is only named
+        self.assertIn("@story/summaries/ 下（act1）", boot)
         self.assertEqual(self.overlay(), [])
 
         out = self.next()  # nothing new in act3's overlay
@@ -151,6 +157,25 @@ class FunctionalTest(unittest.TestCase):
         self.engine("discard", "--json")
         self.assertIn("@story 0.1.0", self.next())
 
+    def test_settlement_checks_block_next(self):
+        """An overlay is baked only with the stage summary in it and without card errors."""
+        self.init()
+        self.write("people/ghost-note", "玩家怀疑东翼闹鬼。", "--extends", "@overlay/people/ghost")
+        before = (self.state(), self.aliases(), self.overlay())
+        code, _, err = self.flow("-w", self.ws, "next")
+        self.assertEqual(code, 1)
+        self.assertIn("summaries/act1", err)
+        self.assertEqual((self.state(), self.aliases(), self.overlay()), before)
+
+        self.write("summaries/act1", "玩家抵达庄园。")
+        code, _, err = self.flow("-w", self.ws, "next")
+        self.assertEqual(code, 1)
+        self.assertIn("@overlay/people/ghost-note [broken_lineage]", err)
+        self.assertEqual(self.state()["stage"], "act1")
+
+        self.write("people/ghost", "东翼的传闻。")  # the extends target now exists
+        self.assertIn("baked 3 cards into @story 0.1.0", self.next())
+
     def test_next_to(self):
         self.init()
         self.next("--to", "act3")
@@ -158,6 +183,7 @@ class FunctionalTest(unittest.TestCase):
         self.assertEqual(self.state()["done"], [{"stage": "act1", "version": None}])
         self.assertIn("@act3", self.aliases())
         self.assertNotIn("@story", self.aliases())  # nothing was baked yet
+        self.assertIn("@story/summaries/ 下（act1）", self.boot())  # no baked summary to attach
         code, _, err = self.flow("-w", self.ws, "next", "--to", "nope")
         self.assertEqual(code, 1)
         self.assertIn("stages: act1, act2, act3", err)

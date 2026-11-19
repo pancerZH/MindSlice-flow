@@ -84,6 +84,33 @@ def unmount(ws: Path, alias: str) -> None:
     _call("-w", str(ws), "unmount", alias)
 
 
+def validate(ws: Path) -> dict:
+    """The validation report. The engine exits 1 when it found errors, and still prints the report."""
+    args = ("-w", str(ws), "validate")
+    done = _engine(*args, "--json")
+    try:
+        report = json.loads(done.stdout)
+    except json.JSONDecodeError:
+        raise _error(args, done) from None
+    if done.returncode not in (0, 1) or "errors" not in report:
+        raise _error(args, done)
+    return report
+
+
+def read(ws: Path, address: str) -> dict | None:
+    """The card at ``address``, or None when there is none (or its mount is not mounted)."""
+    args = ("-w", str(ws), "read", address)
+    done = _engine(*args, "--json")
+    if done.returncode == 0:
+        return json.loads(done.stdout)
+    try:
+        if json.loads(done.stderr).get("code") == "not_found":
+            return None
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    raise _error(args, done)
+
+
 def bake(ws: Path, alias: str) -> dict:
     """Move every @overlay card into the slice ``alias``: a new slice the first time, a new version after."""
     return _call("-w", str(ws), "bake", f"@{alias}", "--prefix", "")

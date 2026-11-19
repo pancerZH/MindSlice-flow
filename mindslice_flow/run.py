@@ -80,8 +80,12 @@ def fill(text: str, values: dict[str, str]) -> str:
     return f"+++\n{head}+++\n{PLACEHOLDER.sub(lambda m: values[m[1]], body)}"
 
 
-def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> dict[str, str]:
-    """The files of the @flow slice for ``stage`` (``None``: the flow is finished)."""
+def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str],
+          recap: tuple[str, str] | None = None) -> dict[str, str]:
+    """The files of the @flow slice for ``stage`` (``None``: the flow is finished).
+
+    ``recap`` is (stage id, summary body) of the stage played last; the stage card carries it in full.
+    """
     values = {
         "flow_name": flow.name, "total": str(len(flow.stages)), "state": flow.state,
         "flow_cmd": f"mindslice-flow -w {shlex.quote(str(ws))}",
@@ -95,10 +99,17 @@ def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> dict[st
     number = flow.index(stage.id) + 1
     last = number == len(flow.stages)
     earlier = list(dict.fromkeys(s for s in done if s != stage.id))
+    if recap:
+        older = [s for s in earlier if s != recap[0]]
+        previous = f"上一幕（{recap[0]}）的摘要附在本卡末尾，承接剧情以它为准，不必再读取。" + (
+            f"更早各幕的摘要在 @{flow.state}/summaries/ 下（{', '.join(older)}），需要时读取。" if older else "")
+    elif earlier:
+        previous = f"前面各幕的摘要在 @{flow.state}/summaries/ 下（{', '.join(earlier)}），需要承接剧情时读取。"
+    else:
+        previous = "这是本次运行的第一幕，还没有前情。"
     values |= {
-        "stage_id": stage.id, "stage_title": stage.title, "number": str(number),
-        "previous": (f"前面各幕的摘要在 @{flow.state}/summaries/ 下（{', '.join(earlier)}），需要承接剧情时读取。"
-                     if earlier else "这是本次运行的第一幕，还没有前情。"),
+        "stage_id": stage.id, "stage_title": stage.title, "number": str(number), "previous": previous,
+        "recap": f"\n## 上一幕摘要（@{flow.state}/summaries/{recap[0]}）\n\n{recap[1].strip()}\n" if recap else "",
         "after": ("这是最后一幕，next 会把流程标记为结束。" if last else
                   "建议用户开一个新会话进入下一幕；若在当前会话继续，先调用 manifest 重新加载常驻卡，"
                   "此前的导演卡和本卡随之作废。"),
@@ -108,11 +119,22 @@ def cards(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> dict[st
     return files
 
 
+def last_summary(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> tuple[str, str] | None:
+    """(stage id, body) of the baked summary of the stage played last, if there is one."""
+    if stage is None:
+        return None
+    played = [s for s in done if s != stage.id]
+    if not played:
+        return None
+    card = engine.read(ws, f"@{flow.state}/summaries/{played[-1]}")
+    return (played[-1], card["body"]) if card else None
+
+
 def render(ws: Path, flow: Flow, stage: Stage | None, done: list[str]) -> None:
     """Rewrite the @flow slice directory; files it no longer has are removed."""
     root = ws / FLOW_SLICE
     root.mkdir(parents=True, exist_ok=True)
-    files = cards(ws, flow, stage, done)
+    files = cards(ws, flow, stage, done, last_summary(ws, flow, stage, done))
     for old in root.iterdir():
         if old.is_file() and old.name not in files:
             old.unlink()
@@ -183,6 +205,22 @@ def init(flow_dir: Path, ws: Path) -> None:
     print("then start a new session and play.")
 
 
+def overlay_cards(ws: Path) -> list[str]:
+    """The paths of the @overlay cards, which the next bake moves into the state slice."""
+    return sorted(p.relative_to(ws / "overlay").with_suffix("").as_posix() for p in (ws / "overlay").rglob("*.md"))
+
+
+def check_settlement(ws: Path, stage: str | None) -> None:
+    """What must hold before the overlay is baked: the stage summary exists, and no overlay card has an error."""
+    if stage is not None and f"summaries/{stage}" not in overlay_cards(ws):
+        raise FlowError(f"@overlay has no stage summary `summaries/{stage}`; write it before `next` "
+                        f"(step 3 of @flow/settlement)")
+    errors = [e for e in engine.validate(ws)["errors"] if str(e.get("address", "")).startswith("@overlay/")]
+    if errors:
+        lines = [f"  - {e['address']} [{e['code']}]: {e['message']}" for e in errors]
+        raise FlowError("these @overlay cards have errors; fix them before they are baked:\n" + "\n".join(lines))
+
+
 def status(ws: Path) -> None:
     state, flow = load(ws)
     st = engine.status(ws)
@@ -197,8 +235,7 @@ def status(ws: Path) -> None:
     if state["stage"] is None:
         print("the flow is finished")
     print(f"mounted: {' '.join(m['alias'] for m in st['mounts'])}")
-    overlay = sorted(p.relative_to(ws / "overlay").with_suffix("").as_posix()
-                     for p in (ws / "overlay").rglob("*.md"))
+    overlay = overlay_cards(ws)
     print(f"overlay cards to settle ({len(overlay)}): {', '.join(overlay) or '-'}")
     pending = st["pending_review"]["files"]
     print(f"pending review ({len(pending)}): {', '.join(f['address'] for f in pending) or '-'}")
@@ -208,7 +245,8 @@ def status(ws: Path) -> None:
 
 def advance(ws: Path, to: str | None = None) -> None:
     """Settle the current stage and enter the next one (or ``to``). Safe to run again after an interruption:
-    the bake is skipped once the overlay is empty, and the state is written last."""
+    the bake is skipped once the overlay is empty, and the state is written last. A non-empty overlay is
+    baked only with the stage summary in it and no card errors."""
     state, flow = load(ws)
     current = state["stage"]
     if to is not None:
@@ -225,7 +263,10 @@ def advance(ws: Path, to: str | None = None) -> None:
         lines = [f"  - {f['address']}: {f.get('requires_approval') or f.get('change')}" for f in pending]
         raise FlowError("changes are waiting for review; the user decides on them first with "
                         f"`mindslice -w {shlex.quote(str(ws))} review` (or apply / discard):\n" + "\n".join(lines))
-    baked = engine.bake(ws, flow.state) if st["memory_state"]["saved_overlay_cards"] else None
+    baked = None
+    if st["memory_state"]["saved_overlay_cards"]:
+        check_settlement(ws, current)
+        baked = engine.bake(ws, flow.state)
 
     done = [d["stage"] for d in state["done"]] + ([current] if current else [])
     added, removed = enter(ws, flow, target, done)

@@ -117,6 +117,17 @@ class CardsTest(unittest.TestCase):
         self.assertIn("（act1, act2）", last["stage.md"])
         self.assertIn("最后一幕", last["settlement.md"])
 
+    def test_recap(self):
+        body = "- 玩家拿到了钥匙。{{state}}\n"
+        text = run.cards(self.ws, self.flow, self.flow.stages[2], ["act1", "act2"], ("act2", body))["stage.md"]
+        self.assertIn("上一幕（act2）的摘要附在本卡末尾", text)
+        self.assertIn("@story/summaries/ 下（act1）", text)
+        self.assertTrue(text.endswith("## 上一幕摘要（@story/summaries/act2）\n\n- 玩家拿到了钥匙。{{state}}\n"))
+        first = run.cards(self.ws, self.flow, self.flow.stages[1], ["act1"], ("act1", body))["stage.md"]
+        self.assertNotIn("更早各幕", first)
+        plain = run.cards(self.ws, self.flow, self.flow.stages[1], ["act1"])["stage.md"]
+        self.assertTrue(plain.endswith("并照做。\n"))
+
     def test_quotes_in_names(self):
         title = '第一幕："抵达" \\ {{state}}'
         stage = dataclasses.replace(self.flow.stages[0], title=title)

@@ -58,8 +58,11 @@ The workspace is found like `mindslice` finds it: `-w`, else `$MINDSLICE_WORKSPA
 directory with `mounts.toml`. Each run gets its own workspace; the flow owns its mount table.
 
 `next` refuses while changes wait for review (decide on them with `mindslice review`, `apply` or
-`discard`), bakes every `@overlay` card into the state slice, mounts exactly the next stage's slices
-plus `@overlay`, the state slice and `@flow`, and rewrites the `@flow` cards. It writes its state last,
+`discard`), and, when the overlay has cards, while the stage summary `summaries/<stage-id>` is missing
+or `mindslice validate` reports an error on an `@overlay` card. Then it bakes every `@overlay` card into
+the state slice, mounts exactly the next stage's slices plus `@overlay`, the state slice and `@flow`,
+and rewrites the `@flow` cards; the new stage card carries the baked summary of the stage just played,
+so the next session starts from it without reading it. It writes its state last,
 so running it again after an interruption finishes the same switch. After the last stage it marks
 the flow finished; `next --to STAGE` plays a stage again. To undo a stage's bake, use
 `mindslice rollback @story --yes` and then `next --to`.
