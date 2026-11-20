@@ -144,6 +144,20 @@ class FunctionalTest(unittest.TestCase):
         self.assertEqual(self.state()["stage"], "act2")
         self.assertIn("第二幕导演卡", self.boot())
 
+    def test_reused_alias_collision_is_rejected_before_bake(self):
+        flow = self.tmp / "definition"
+        shutil.copytree(EXAMPLE, flow)
+        for stage in ("act1", "act2"):
+            with (flow / "slices" / f"{stage}.slice" / "slice.toml").open("a") as f:
+                f.write('alias = "cast"\n')
+        self.ok("init", flow, "-o", self.ws)
+        self.play_act1()
+        before = self.state(), self.overlay(), self.aliases()
+        code, _, err = self.flow("-w", self.ws, "next", "--reuse", "act1")
+        self.assertNotEqual(code, 0)
+        self.assertIn("@cast", err)
+        self.assertEqual((self.state(), self.overlay(), self.aliases()), before)
+
     def test_pending_review_blocks_next(self):
         self.init()
         self.write("summaries/act1", "摘要")

@@ -532,6 +532,13 @@ def advance(ws: Path, to: str | None = None, new: str | None = None, title: str 
                             f"{goal.id if goal else 'the stage played last'} can be reused here: {', '.join(allowed)}")
     reuse = [r for r in dict.fromkeys(reuse) if target is not None and r != target.id]
 
+    aliases = {}
+    for path in wanted(flow, target, [stage_of(ws, flow, state, r) for r in reuse]):
+        alias = definition.alias(path)
+        if alias in aliases and aliases[alias] != path:
+            raise FlowError(f"cannot reuse these stages together: {path} and {aliases[alias]} both mount as @{alias}")
+        aliases[alias] = path
+
     st = engine.status(ws)
     pending = st["pending_review"]["files"]
     if pending:
